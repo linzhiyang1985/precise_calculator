@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
-import PySimpleGUI as sg
 import re
+import pyperclip
+import PySimpleGUI as sg
 sg.theme('LightBlue')
 
 """
@@ -23,32 +24,40 @@ BigDecimal 内部用三段表示一个数：
 class CalculatorGUI:
     def __init__(self):
         self.window = sg.Window('无限位数计算器', [
-            [sg.Text('第一个数:'), sg.Input(key='first_num', enable_events=True, tooltip='只允许数字和小数点，[Delete]清空输入')],
-            [sg.Text('第二个数:'), sg.Input(key='second_num', enable_events=True, tooltip='只允许数字和小数点，[Delete]清空输入')],
-            [sg.Text('运算符:'), sg.Radio('+', key='opt_add', group_id='operator', default=True),
-                                sg.Radio('-', key='opt_sub', group_id='operator'),
-                                sg.Radio('*', key='opt_mul', group_id='operator'),
-                                sg.Radio('/', key='opt_div', group_id='operator')],
-            [sg.Button('计算', key='calculate')],
-            [sg.Text('精度位数:'), sg.Slider(range=(0, 100), default_value=4, key='precision', orientation='h')],
-            [sg.Text('等于:'), sg.Input(key='result', readonly=True, default_text='...')]
-        ],
-        titlebar_background_color='Blue', titlebar_font=('Helvetica', 16), font=('Helvetica', 14),
-        return_keyboard_events=True, finalize=True, print_event_values=False)
+                [sg.Text('第一个数:'), sg.Input(key='first_num', enable_events=True, tooltip='只允许数字和小数点，[Delete]清空输入')],
+                [sg.Text('第二个数:'), sg.Input(key='second_num', enable_events=True, tooltip='只允许数字和小数点，[Delete]清空输入')],
+                [sg.Text('运算符:'), sg.Radio('+', key='opt_add', group_id='operator', default=True),
+                                    sg.Radio('-', key='opt_sub', group_id='operator'),
+                                    sg.Radio('*', key='opt_mul', group_id='operator'),
+                                    sg.Radio('/', key='opt_div', group_id='operator')],
+                [sg.Button('计算', key='calculate'), sg.Button('复制', key='copy')],
+                [sg.Text('精度位数:'), sg.Slider(range=(0, 100), default_value=4, key='precision', orientation='h')],
+                [sg.Text('等于:'), sg.Input(key='result', readonly=True)]
+            ],
+            titlebar_background_color='Blue', titlebar_font=('Helvetica', 16), font=('Helvetica', 14),
+            return_keyboard_events=True, finalize=True, print_event_values=False)
+        self.window['first_num'].bind("<Control-A>", " CTRL-A", propagate=False)
+        self.window['first_num'].bind("<Control-a>", " CTRL-A", propagate=False)
+        self.window['second_num'].bind("<Control-A>", " CTRL-A", propagate=False)
+        self.window['second_num'].bind("<Control-a>", " CTRL-A", propagate=False)
+        self.operator = '+'
         self._event_loop_()
-        self.NUMBER
 
     def _event_loop_(self):
         """事件循环，处理用户输入。"""
         while True:
             event, values = self.window.read()
+
             if event == sg.WIN_CLOSED:
                 break
 
             if self.window.find_element_with_focus().key in ('first_num', 'second_num'):
+                
                 focused_elem = self.window.find_element_with_focus()
-                if event.startswith('Delete'):
+                if event.startswith('Delete') or event.startswith('KP_Delete'):
                     focused_elem.update('')
+                elif event.endswith('CTRL-A'):
+                    focused_elem.update(select=True)
                 else:
                     not_allowed_chars = '[^0123456789.+-]'
                     origin_value = values[focused_elem.key]
@@ -66,22 +75,29 @@ class CalculatorGUI:
                     if origin_value != removed_illegal_chars:
                         self.window[focused_elem.key].update(removed_illegal_chars)
             else:
-                if event.startswith('KP_Add') or event.startswith('plus'):
-                    self.window['opt_add'].update(True)
-                elif event.startswith('KP_Subtract') or event.startswith('minus'):
-                    self.window['opt_sub'].update(True)
-                elif event.startswith('KP_Multiply') or event.startswith('asterisk'):
-                    self.window['opt_mul'].update(True)
-                elif event.startswith('KP_Divide') or event.startswith('slash'):
-                    self.window['opt_div'].update(True)
-                
                 if event.startswith('Right'):
                     self.window['precision'].update(values['precision'] + 1)
                 elif event.startswith('Left'):
                     self.window['precision'].update(values['precision'] - 1)
 
+            if event.startswith('KP_Add') or event.startswith('plus'):
+                self.window['opt_add'].update(True)
+                self.operator = '+'
+            elif event.startswith('KP_Subtract') or event.startswith('minus'):
+                self.window['opt_sub'].update(True)
+                self.operator = '-'
+            elif event.startswith('KP_Multiply') or event.startswith('asterisk'):
+                self.window['opt_mul'].update(True)
+                self.operator = '*'
+            elif event.startswith('KP_Divide') or event.startswith('slash'):
+                self.window['opt_div'].update(True)
+                self.operator = '/'
+
             if event == 'calculate' or event.startswith('KP_Enter') or event.startswith('Return'):
                 self._handle_calculate(values)
+            elif event == 'copy':
+                self._handle_copy(values)
+        
         self.window.close()
     
     def _handle_calculate(self, values):
@@ -99,9 +115,13 @@ class CalculatorGUI:
                 if remainder != BigDecimal(0):
                     result = f'{result}...{remainder}'
         else:
-                result = '...'
+                result = '0'
         self.window['result'].update(str(result))
 
+    def _handle_copy(self, values):
+        """处理复制按钮点击事件。"""
+        format_to_str = f'{values['first_num'] if values['first_num'].strip() != '' else "0"} {self.operator} {values['second_num'] if values['second_num'].strip() != '' else "0"} = {values['result'] if values['result'].strip() != '' else "0"}'
+        pyperclip.copy(format_to_str)
 
 class BigDecimal:
     """任意精度十进制小数。"""
